@@ -1,0 +1,16 @@
+# Third-party installation assets
+/sources/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+
+# Generated runtime data
+/data/
+/secrets/
+/logs/
+/certificates/
+/archived/middleware/dist/
+middleware/node_modules/
+/middleware/dist/

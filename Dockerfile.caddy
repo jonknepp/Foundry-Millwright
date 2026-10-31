@@ -1,0 +1,10 @@
+# Millwright Caddy build with the Caddy Security module.
+# For a production release, pin matching Caddy image digests and the plugin version.
+FROM caddy:2-builder AS builder
+
+RUN xcaddy build \
+    --with github.com/greenpau/caddy-security \
+    --with github.com/caddy-dns/duckdns
+
+FROM caddy:2
+COPY --from=builder /usr/bin/caddy /usr/bin/caddy

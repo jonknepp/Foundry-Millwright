@@ -1,0 +1,150 @@
+name: millwright
+
+services:
+  foundry:
+    image: felddy/foundryvtt:14
+    hostname: millwright-foundry
+    restart: unless-stopped
+
+    networks:
+      - public-ingress
+      - foundry-control
+
+    environment:
+      FOUNDRY_VERSION: "14.369"
+      CONTAINER_PRESERVE_CONFIG: "true"
+      CONTAINER_CACHE: /data/container_cache
+      FOUNDRY_HOSTNAME: localhost
+      FOUNDRY_LOCAL_HOSTNAME: localhost
+      FOUNDRY_PROXY_SSL: "true"
+      FOUNDRY_UPNP: "false"
+      FOUNDRY_IP_DISCOVERY: "false"
+      FOUNDRY_TELEMETRY: "false"
+
+    volumes:
+      - type: bind
+        source: ${MILLWRIGHT_DATA_DIR}/foundry
+        target: /data
+
+  middleware:
+    image: millwright-middleware:local
+    build:
+      context: ./middleware
+    hostname: millwright-middleware
+    restart: unless-stopped
+    profiles:
+      - middleware
+    networks:
+      - middleware-ingress
+      - middleware-egress
+      - foundry-control
+    environment:
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:?Discord guild ID is required}
+      MILLWRIGHT_LISTEN_HOST: 0.0.0.0
+      MILLWRIGHT_LISTEN_PORT: 8080
+      MILLWRIGHT_IDENTITY_DIAGNOSTIC: ${MILLWRIGHT_IDENTITY_DIAGNOSTIC:-false}
+    secrets:
+      - discord-bot-token
+      - middleware-proxy-key
+      - administrator-bootstrap-challenge
+      - service-credential-key
+    volumes:
+      - type: bind
+        source: ${MILLWRIGHT_DATA_DIR}/middleware
+        target: /var/lib/millwright
+      - type: bind
+        source: ${MILLWRIGHT_DATA_DIR}/restart-signals
+        target: /var/lib/millwright-restart
+
+  restart-helper:
+    build:
+      context: ./restart-helper
+    image: millwright-restart-helper:local
+    restart: unless-stopped
+    network_mode: none
+    profiles:
+      - middleware
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+      - type: bind
+        source: ${MILLWRIGHT_DATA_DIR}/restart-signals
+        target: /signals
+
+  caddy:
+    image: millwright-caddy:local
+    build:
+      context: .
+      dockerfile: Dockerfile.caddy
+    hostname: millwright-caddy
+    restart: unless-stopped
+
+    networks:
+      - public-ingress
+      - middleware-ingress
+
+    ports:
+      - "${MILLWRIGHT_HTTPS_BIND_ADDRESS:-0.0.0.0}:${MILLWRIGHT_HTTPS_PORT:-8443}:443"
+
+    environment:
+      MILLWRIGHT_PUBLIC_HOSTNAME: ${MILLWRIGHT_PUBLIC_HOSTNAME:?Public hostname is required}
+      MILLWRIGHT_LAN_IP: ${MILLWRIGHT_LAN_IP:?LAN IPv4 address is required}
+      MILLWRIGHT_HTTPS_PORT: ${MILLWRIGHT_HTTPS_PORT:-8443}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:?Discord client ID is required}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:?Discord guild ID is required}
+      MILLWRIGHT_AUTH_TOKEN_LIFETIME: ${MILLWRIGHT_AUTH_TOKEN_LIFETIME:-604800}
+
+    secrets:
+      - discord-client-secret
+      - authcrunch-signing-key
+      - duckdns-token
+      - middleware-proxy-key
+
+    volumes:
+      - type: bind
+        source: ${MILLWRIGHT_CADDYFILE:-${MILLWRIGHT_DATA_DIR}/config/ingress/Caddyfile}
+        target: /etc/caddy/Caddyfile
+        read_only: true
+
+      - type: bind
+        source: ${MILLWRIGHT_DATA_DIR}/certificates/caddy
+        target: /data
+
+      - type: bind
+        source: ${MILLWRIGHT_DATA_DIR}/config/ingress/caddy-state
+        target: /config
+
+    depends_on:
+      - foundry
+
+secrets:
+  discord-client-secret:
+    file: ${MILLWRIGHT_DATA_DIR}/secrets/discord-client-secret
+  authcrunch-signing-key:
+    file: ${MILLWRIGHT_DATA_DIR}/secrets/authcrunch-signing-key
+  discord-bot-token:
+    file: ${MILLWRIGHT_DATA_DIR}/secrets/discord-bot-token
+  duckdns-token:
+    file: ${MILLWRIGHT_DATA_DIR}/secrets/duckdns-token
+  middleware-proxy-key:
+    file: ${MILLWRIGHT_DATA_DIR}/secrets/middleware-proxy-key
+  administrator-bootstrap-challenge:
+    file: ${MILLWRIGHT_DATA_DIR}/secrets/administrator-bootstrap-challenge
+  service-credential-key:
+    file: ${MILLWRIGHT_DATA_DIR}/secrets/service-credential-key
+
+networks:
+  public-ingress:
+    driver: bridge
+
+  middleware-ingress:
+    driver: bridge
+    internal: true
+
+  middleware-egress:
+    driver: bridge
+
+  foundry-control:
+    driver: bridge
+    internal: true

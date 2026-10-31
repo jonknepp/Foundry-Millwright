@@ -1,0 +1,18 @@
+{
+  "id": "millwright",
+  "title": "Millwright",
+  "description": "Extends Foundry VTT with account administration, Discord identity linking, and integration with the Millwright Service.",
+  "version": "0.1.0",
+  "compatibility": {
+    "minimum": "14",
+    "verified": "14"
+  },
+  "esmodules": [
+    "scripts/millwright.js"
+  ],
+  "authors": [
+    {
+      "name": "Foundry-Millwright"
+    }
+  ]
+}
